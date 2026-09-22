@@ -3,7 +3,7 @@ import { MaxOsError, SubstrateError } from '../resilience/errors';
 import { retry, type RetryPolicy } from '../resilience/retries';
 import { substrateTimeout, withTimeout } from '../resilience/timeouts';
 import { R2StateRepository } from './adapters/r2';
-import { isSessionState, isSIMState, isTECState, isUniverseState, normalizeSIMState, type SessionState, type SIMState, type StateModel, type StateTransition, type TECState, type UniverseState } from './models/state';
+import { isSessionState, isSIMState, isTECState, isUniverseState, normalizeSIMState, validateSIMState, type SessionState, type SIMState, type StateModel, type StateTransition, type TECState, type UniverseState } from './models/state';
 import { InMemoryRepository } from './repositories/memory';
 import { createStateCodec, type Repository } from './repositories/repository';
 
@@ -24,8 +24,14 @@ export class Substrate {
   }
 
   transitionSession(transition: StateTransition<SessionState>) { return this.executeOperation('session.transition', () => this.applyTransition(this.repositories.sessions, transition)); }
-  transitionSIM(transition: StateTransition<SIMState>): Promise<StateModel<SIMState>> { return this.executeOperation('sim.transition', async () => this.applyTransition(this.repositories.sim, { ...transition, next: normalizeSIMState(transition.next) })); }
-  transitionTEC(transition: StateTransition<T​​ECState>) { return this.executeOperation('tec.transition', () => this.applyTransition(this.repositories.tec, transition)); }
+  transitionSIM(transition: StateTransition<SIMState>): Promise<StateModel<SIMState>> {
+    return this.executeOperation('sim.transition', async () => {
+      const next = normalizeSIMState(transition.next);
+      if (!validateSIMState(next)) throw new MaxOsError('INVALID_STATE', 'Invalid SIMState after transition', 422);
+      return this.applyTransition(this.repositories.sim, { ...transition, next });
+    });
+  }
+  transitionTEC(transition: StateTransition<TECState>) { return this.executeOperation('tec.transition', () => this.applyTransition(this.repositories.tec, transition)); }
   transitionUniverse(transition: StateTransition<UniverseState>) { return this.executeOperation('universe.transition', () => this.applyTransition(this.repositories.universe, transition)); }
   readSession(key: string) { return this.executeOperation('session.read', () => this.repositories.sessions.read(key)); }
   readSIM(key: string): Promise<StateModel<SIMState> | null> { return this.executeOperation('sim.read', async () => { const state = await this.repositories.sim.read(key); return state ? { ...state, value: normalizeSIMState(state.value) } : null; }); }

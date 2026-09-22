@@ -15,11 +15,7 @@ export type StateTransition<T> = {
   next: T;
 };
 
-export type UniverseState = JsonObject & {
-  started: boolean;
-  tick: number;
-};
-
+export type UniverseState = JsonObject & { started: boolean; tick: number };
 export type SIMMode = 'idle' | 'planning' | 'running' | 'paused' | 'error';
 export type SIMStatus = 'connected' | 'not_connected';
 
@@ -50,23 +46,50 @@ export type NormalizedSIMState = SIMState & {
   status: SIMStatus;
 };
 
+const SIM_MODES: readonly SIMMode[] = ['idle', 'planning', 'running', 'paused', 'error'];
+const SIM_STATUSES: readonly SIMStatus[] = ['connected', 'not_connected'];
+
+function nullableString(value: unknown): string | null {
+  return value === null || typeof value === 'string' ? value : null;
+}
+
 export function normalizeSIMState(raw: Partial<SIMState> | null): NormalizedSIMState {
   const base = raw ?? {};
+  const mode = SIM_MODES.includes(base.mode as SIMMode) ? base.mode as SIMMode : 'idle';
+  const status = SIM_STATUSES.includes(base.status as SIMStatus)
+    ? base.status as SIMStatus
+    : 'not_connected';
   return {
     ...base,
     lastEnvelopeId: base.lastEnvelopeId ?? null,
-    memory: base.memory ?? {},
-    steps: typeof base.steps === 'number' && Number.isInteger(base.steps) ? base.steps : 0,
-    mode: base.mode ?? 'idle',
-    lastOp: base.lastOp ?? null,
-    lastCalc: base.lastCalc ?? null,
-    lastMap: base.lastMap ?? null,
-    lastPipe: base.lastPipe ?? null,
-    lastExpand: base.lastExpand ?? null,
-    lastBuild: base.lastBuild ?? null,
-    global: base.global ?? {},
-    status: base.status ?? (raw ? 'connected' : 'not_connected'),
+    memory: isJsonObject(base.memory) ? base.memory : {},
+    steps: typeof base.steps === 'number' && Number.isInteger(base.steps) && base.steps >= 0 ? base.steps : 0,
+    mode,
+    lastOp: nullableString(base.lastOp),
+    lastCalc: nullableString(base.lastCalc),
+    lastMap: nullableString(base.lastMap),
+    lastPipe: nullableString(base.lastPipe),
+    lastExpand: nullableString(base.lastExpand),
+    lastBuild: nullableString(base.lastBuild),
+    global: isJsonObject(base.global) ? base.global : {},
+    status,
   };
+}
+
+/** Validate both legacy state and the complete normalized behavior shape. */
+export function validateSIMState(state: SIMState): state is NormalizedSIMState {
+  return isJsonObject(state)
+    && (typeof state.lastEnvelopeId === 'string' || state.lastEnvelopeId === null)
+    && isJsonObject(state.memory)
+    && typeof state.steps === 'number'
+    && Number.isInteger(state.steps)
+    && state.steps >= 0
+    && typeof state.mode === 'string'
+    && SIM_MODES.includes(state.mode as SIMMode)
+    && [state.lastOp, state.lastCalc, state.lastMap, state.lastPipe, state.lastExpand, state.lastBuild]
+      .every((value) => value === null || typeof value === 'string')
+    && isJsonObject(state.global)
+    && SIM_STATUSES.includes(state.status as SIMStatus);
 }
 
 export type TECState = JsonObject & { actionCount: number; executions: number; lastEnvelopeId: string };
@@ -77,14 +100,7 @@ export function isUniverseState(value: unknown): value is UniverseState {
 }
 
 export function isSIMState(value: unknown): value is SIMState {
-  return isJsonObject(value)
-    && (typeof value.lastEnvelopeId === 'string' || value.lastEnvelopeId === null)
-    && isJsonObject(value.memory)
-    && typeof value.steps === 'number'
-    && Number.isInteger(value.steps)
-    && value.steps >= 0
-    && (value.mode === undefined || ['idle', 'planning', 'running', 'paused', 'error'].includes(value.mode as string))
-    && (value.status === undefined || value.status === 'connected' || value.status === 'not_connected');
+  return isJsonObject(value) && validateSIMState(value as SIMState);
 }
 
 export function isTECState(value: unknown): value is TECState {
