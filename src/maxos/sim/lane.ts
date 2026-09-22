@@ -1,65 +1,27 @@
 import { mergeJson, stableClone } from '../stable';
 import type { Substrate } from '../state/substrate';
-import type { SIMState, StateModel } from '../state/models/state';
+import { normalizeSIMState, type SIMState, type StateModel } from '../state/models/state';
 import type { Envelope, JsonObject, SIMResponse } from '../types';
 import type { BeforeLaneCommit } from '../routing/types';
 
-function stateKey(envelope: Envelope): string {
-  return `sim:${envelope.sessionId ?? envelope.identity.id}`;
+function stateKey(envelope: Envelope): string { return `sim:${envelope.sessionId ?? envelope.identity.id}`; }
+
+export class SIMLane {
+  constructor(private readonly substrate: Substrate) {}
+  async handleIntrospectionBehavior(envelope: Envelope): Promise<JsonObject> {
+    const state = await this.substrate.readSIM(stateKey(envelope));
+    const sim = normalizeSIMState(state?.value ?? null);
+    return stableClone({ mode: sim.mode, lastOp: sim.lastOp, lastCalc: sim.lastCalc, lastMap: sim.lastMap, lastPipe: sim.lastPipe, lastExpand: sim.lastExpand, lastBuild: sim.lastBuild, global: sim.global ?? {}, status: sim.status ?? 'connected' });
+  }
 }
 
-export async function maintainSIMState(
-  envelope: Envelope,
-  substrate: Substrate,
-  beforeCommit?: BeforeLaneCommit,
-): Promise<StateModel<SIMState>> {
-  const key = stateKey(envelope);
-  const current = await substrate.readSIM(key);
-  const next: SIMState = {
-    lastEnvelopeId: envelope.id,
-    memory: mergeJson(current?.value.memory ?? {}, envelope.payload),
-    steps: (current?.value.steps ?? 0) + 1,
-  };
+export async function maintainSIMState(envelope: Envelope, substrate: Substrate, beforeCommit?: BeforeLaneCommit): Promise<StateModel<SIMState>> {
+  const key = stateKey(envelope); const current = await substrate.readSIM(key);
+  const next = normalizeSIMState({ ...current?.value, lastEnvelopeId: envelope.id, memory: mergeJson(current?.value.memory ?? {}, envelope.payload), steps: (current?.value.steps ?? 0) + 1, mode: current?.value.mode ?? 'running', status: 'connected' });
   await beforeCommit?.();
-  return substrate.transitionSIM({
-    id: `sim:${envelope.id}`,
-    key,
-    expectedVersion: current?.version ?? 0,
-    next,
-  });
+  return substrate.transitionSIM({ id: `sim:${envelope.id}`, key, expectedVersion: current?.version ?? 0, next });
 }
 
-export function produceSIMOutput(state: StateModel<SIMState>): JsonObject {
-  return stableClone({
-    lastEnvelopeId: state.value.lastEnvelopeId,
-    memory: state.value.memory,
-    steps: state.value.steps,
-  });
-}
-
-export function attachSIMMetadata(response: SIMResponse): SIMResponse {
-  return {
-    ...response,
-    metadata: {
-      ...response.metadata,
-      deterministic: true,
-      stateful: true,
-    },
-  };
-}
-
-export async function processSIMEnvelope(
-  envelope: Envelope,
-  substrate: Substrate,
-  beforeCommit?: BeforeLaneCommit,
-): Promise<SIMResponse> {
-  const state = await maintainSIMState(envelope, substrate, beforeCommit);
-  return attachSIMMetadata({
-    ok: true,
-    envelopeId: envelope.id,
-    lane: 'sim',
-    stateVersion: state.version,
-    data: produceSIMOutput(state),
-    metadata: {},
-  });
-}
+export function produceSIMOutput(state: StateModel<SIMState>): JsonObject { return stableClone({ lastEnvelopeId: state.value.lastEnvelopeId, memory: state.value.memory, steps: state.value.steps, mode: state.value.mode, lastOp: state.value.lastOp, lastCalc: state.value.lastCalc, lastMap: state.value.lastMap, lastPipe: state.value.lastPipe, lastExpand: state.value.lastExpand, lastBuild: state.value.lastBuild, global: state.value.global ?? {}, status: state.value.status ?? 'connected' }); }
+export function attachSIMMetadata(response: SIMResponse): SIMResponse { return { ...response, metadata: { ...response.metadata, deterministic: true, stateful: true } }; }
+export async function processSIMEnvelope(envelope: Envelope, substrate: Substrate, beforeCommit?: BeforeLaneCommit): Promise<SIMResponse> { const state = await maintainSIMState(envelope, substrate, beforeCommit); return attachSIMMetadata({ ok: true, envelopeId: envelope.id, lane: 'sim', stateVersion: state.version, data: produceSIMOutput(state), metadata: {} }); }

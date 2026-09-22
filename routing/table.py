@@ -1,29 +1,9 @@
 """Deterministic message type to scheduler lane mappings."""
-
 ROUTES = {
-    "sim": ("cognitive",),
-    "cognitive": ("cognitive",),
-    "tec": ("orchestration",),
-    "task": ("orchestration",),
-    "substrate": ("substrate",),
-    "governance": ("governance",),
-    "universe.start": ("orchestration",),
-    "universe.tick": ("orchestration",),
-    "universe.state": ("orchestration",),
-    "universe.umbrella": ("orchestration",),
+    "sim": ("cognitive",), "cognitive": ("cognitive",), "introspection.sim.behavior": ("cognitive",),
+    "tec": ("orchestration",), "task": ("orchestration",), "substrate": ("substrate",), "governance": ("governance",),
+    "universe.start": ("orchestration",), "universe.tick": ("orchestration",), "universe.state": ("orchestration",), "universe.umbrella": ("orchestration",),
     "ecosystem.step": ("cognitive", "orchestration", "substrate"),
 }
-
-LANE_ACTIONS = {
-    "cognitive": "cognitive.process",
-    "orchestration": "orchestration.execute",
-    "substrate": "substrate.write",
-    "governance": "governance.inspect",
-}
-
-MESSAGE_ACTIONS = {
-    "universe.start": "universe.start",
-    "universe.tick": "universe.tick",
-    "universe.state": "universe.read",
-    "universe.umbrella": "universe.read",
-}
+LANE_ACTIONS = {"cognitive": "cognitive.process", "orchestration": "orchestration.execute", "substrate": "substrate.write", "governance": "governance.inspect"}
+MESSAGE_ACTIONS = {"universe.start": "universe.start", "universe.tick": "universe.tick", "universe.state": "universe.read", "universe.umbrella": "universe.read"}
