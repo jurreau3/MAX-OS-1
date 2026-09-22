@@ -16,28 +16,20 @@ export class SIMLane {
     const sim = normalizeSIMState(state?.value ?? null);
     return stableClone({
       mode: sim.mode,
-      lastOp: sim.lastOp,
-      lastCalc: sim.lastCalc,
-      lastMap: sim.lastMap,
-      lastPipe: sim.lastPipe,
-      lastExpand: sim.lastExpand,
-      lastBuild: sim.lastBuild,
-      global: sim.global,
+      last_op: sim.lastOp,
+      last_calc: sim.lastCalc,
+      last_map: sim.lastMap,
+      last_pipe: sim.lastPipe,
+      last_expand: sim.lastExpand,
+      last_build: sim.lastBuild,
+      global_state: sim.global,
       status: sim.status,
     });
   }
 }
 
-function stateKeyForEnvelope(envelope: Envelope): string {
-  return stateKey(envelope);
-}
-
-export async function maintainSIMState(
-  envelope: Envelope,
-  substrate: Substrate,
-  beforeCommit?: BeforeLaneCommit,
-): Promise<StateModel<SIMState>> {
-  const key = stateKeyForEnvelope(envelope);
+export async function maintainSIMState(envelope: Envelope, substrate: Substrate, beforeCommit?: BeforeLaneCommit): Promise<StateModel<SIMState>> {
+  const key = stateKey(envelope);
   const current = await substrate.readSIM(key);
   const next = normalizeSIMState({
     ...current?.value,
@@ -57,13 +49,13 @@ export function produceSIMOutput(state: StateModel<SIMState>): JsonObject {
     memory: state.value.memory,
     steps: state.value.steps,
     mode: state.value.mode,
-    lastOp: state.value.lastOp,
-    lastCalc: state.value.lastCalc,
-    lastMap: state.value.lastMap,
-    lastPipe: state.value.lastPipe,
-    lastExpand: state.value.lastExpand,
-    lastBuild: state.value.lastBuild,
-    global: state.value.global ?? {},
+    last_op: state.value.lastOp,
+    last_calc: state.value.lastCalc,
+    last_map: state.value.lastMap,
+    last_pipe: state.value.lastPipe,
+    last_expand: state.value.lastExpand,
+    last_build: state.value.lastBuild,
+    global_state: state.value.global ?? {},
     status: state.value.status ?? 'connected',
   });
 }
@@ -72,18 +64,7 @@ export function attachSIMMetadata(response: SIMResponse): SIMResponse {
   return { ...response, metadata: { ...response.metadata, deterministic: true, stateful: true } };
 }
 
-export async function processSIMEnvelope(
-  envelope: Envelope,
-  substrate: Substrate,
-  beforeCommit?: BeforeLaneCommit,
-): Promise<SIMResponse> {
+export async function processSIMEnvelope(envelope: Envelope, substrate: Substrate, beforeCommit?: BeforeLaneCommit): Promise<SIMResponse> {
   const state = await maintainSIMState(envelope, substrate, beforeCommit);
-  return attachSIMMetadata({
-    ok: true,
-    envelopeId: envelope.id,
-    lane: 'sim',
-    stateVersion: state.version,
-    data: produceSIMOutput(state),
-    metadata: {},
-  });
+  return attachSIMMetadata({ ok: true, envelopeId: envelope.id, lane: 'sim', stateVersion: state.version, data: produceSIMOutput(state), metadata: {} });
 }

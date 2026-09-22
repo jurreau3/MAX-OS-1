@@ -15,6 +15,12 @@ class SimBehaviorState(TypedDict):
     global_state: Dict[str, Any]
     status: SimStatus
 
+
+def _field(value: Mapping[str, Any], snake: str, camel: str) -> Optional[str]:
+    result = value.get(snake, value.get(camel))
+    return result if result is None or isinstance(result, str) else None
+
+
 def normalize_sim_behavior(raw: Mapping[str, Any] | None) -> SimBehaviorState:
     value = raw or {}
     mode = value.get("mode", "idle")
@@ -23,15 +29,15 @@ def normalize_sim_behavior(raw: Mapping[str, Any] | None) -> SimBehaviorState:
     status = value.get("status", "connected")
     if status not in {"connected", "not_connected"}:
         status = "connected"
-    global_state = value.get("global", {})
+    global_state = value.get("global_state", value.get("global", {}))
     return {
         "mode": mode,
-        "last_op": value.get("lastOp"),
-        "last_calc": value.get("lastCalc"),
-        "last_map": value.get("lastMap"),
-        "last_pipe": value.get("lastPipe"),
-        "last_expand": value.get("lastExpand"),
-        "last_build": value.get("lastBuild"),
+        "last_op": _field(value, "last_op", "lastOp"),
+        "last_calc": _field(value, "last_calc", "lastCalc"),
+        "last_map": _field(value, "last_map", "lastMap"),
+        "last_pipe": _field(value, "last_pipe", "lastPipe"),
+        "last_expand": _field(value, "last_expand", "lastExpand"),
+        "last_build": _field(value, "last_build", "lastBuild"),
         "global_state": dict(global_state) if isinstance(global_state, Mapping) else {},
         "status": status,
     }
